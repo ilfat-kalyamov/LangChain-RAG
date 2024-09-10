@@ -1,5 +1,6 @@
 import os
-from tkinter import filedialog
+import requests
+from bs4 import BeautifulSoup
 import PyPDF2
 import re
 
@@ -12,6 +13,65 @@ def delete_document(file_name):
         print(f"Файл '{file_name}' удален.")
     else:
         print(f"Файл '{file_name}' не найден.")
+
+def is_url(filename):
+    url_pattern = r"^https[^\s]+$"
+    if re.match(url_pattern, filename):
+        print(filename, " Is url")
+        upload_url_file(filename)
+    else:
+        print(filename, " Not url")
+        upload_pdf(filename)
+
+def upload_url_file(url_file):
+    with open(f'{os.path.join(path, url_file)}', 'r', encoding='utf-8') as file:
+        text = file.read()
+    sentences = re.split(r'(?<=[.!?]) +', text)
+    chunks = []
+    current_chunk = ""
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) + 1 < 1000:
+            current_chunk += (sentence + " ").strip()
+        else:
+            chunks.append(current_chunk)
+            current_chunk = sentence + " "
+    if current_chunk:
+        chunks.append(current_chunk)
+        
+    with open("vault.txt", "a", encoding="utf-8") as vault_file:
+        for chunk in chunks:
+            vault_file.write(chunk.strip() + "\n")
+    print(f"URL file content appended to vault.txt with each chunk on a separate line.")
+    
+
+def upload_url(url):
+    response = requests.get(url)
+    response.raise_for_status()  # Выбрасываем исключение, если статус не 200
+    soup = BeautifulSoup(response.text, 'html.parser')
+    text = soup.get_text()
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    filename = os.path.basename(f"{url.replace('/', '_').replace(':', '').replace('__', '_').replace('__', '_')}") + '.txt'
+    filepath = os.path.join(path, filename)
+    with open(filepath, 'w', encoding='utf-8') as file:
+        file.write(text)
+
+    sentences = re.split(r'(?<=[.!?]) +', text) 
+    chunks = []
+    current_chunk = ""
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) + 1 < 1000:
+            current_chunk += (sentence + " ").strip()
+        else:
+            chunks.append(current_chunk)
+            current_chunk = sentence + " "
+    if current_chunk:
+        chunks.append(current_chunk)
+        
+    with open("vault.txt", "a", encoding="utf-8") as vault_file:
+        for chunk in chunks:
+            vault_file.write(chunk.strip() + "\n")
+    print(f"URL content appended to vault.txt with each chunk on a separate line.")
 
 def upload_pdf(file_name):
     file_path = os.path.join(path, file_name)
@@ -53,4 +113,4 @@ def refresh_files():
         os.remove("vault.txt")
     dir_list = os.listdir(path)
     for item in dir_list:
-        upload_pdf(item)
+        is_url(item)

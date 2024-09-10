@@ -6,3 +6,5 @@ pyyaml
 beautifulsoup4
 lxml
 python-dotenv
+requests
+beautifulsoup4

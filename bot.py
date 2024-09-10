@@ -6,9 +6,10 @@ import json
 import ollama
 import torch
 import argparse
+import re
 
 from openai import OpenAI
-from data_manager import upload_pdf, delete_document, refresh_files
+from data_manager import upload_pdf, delete_document, refresh_files, upload_url
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -137,24 +138,37 @@ async def bot_welcome(message: Message) -> None:
 async def bot_help(message: Message) -> None:
     await message.reply("/start - Сообщение при запуске бота.\n/help - Вывод списка всех команд и их объяснение.\n/upload - Загрузка документа в базу данных.\n/delete - Удаление документа из базы данных.\n/list - Вывод списка добавленных документов.\n/ask - Начинает общение с языковой моделью. Напишите любой вопрос касательно ваших документов.\n/quit - Завершает общение с языковой моделью.")
 
+@dp.message(Command("refresh"))
+async def bot_upload(message: Message) -> None:
+    refresh_files()
+    await message.reply("База данных пересобрана.")
+
 @dp.message(Command("upload"))
 async def bot_upload(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.doc)
-    await message.reply("Отправьте документ.\nДля отмены введите любой текст.")
+    await message.reply("Отправьте документ или ссылку.\nДля отмены введите любой текст.")
 
 @dp.message(Form.doc)
 async def bot_recieve(message: Message, state: FSMContext) -> None:
     await state.clear()
-    file_id = message.document.file_id
-    if file_id:
-        file = await message.bot.get_file(file_id)
-        file_path = file.file_path
-        download_path = "D:/Programming/Projects/LangChain+RAG/data/" + f"{message.document.file_name}"
-        await message.bot.download_file(file_path, download_path)
-        await message.answer(f"Документ '{message.document.file_name}' получен.")
-        upload_pdf(message.document.file_name)
+    
+    if message.document:
+        file_id = message.document.file_id
+        if file_id:
+            await message.answer("Вы отправили документ.")
+            file = await message.bot.get_file(file_id)
+            file_path = file.file_path
+            download_path = "D:/Programming/Projects/LangChain+RAG/data/" + f"{message.document.file_name}"
+            await message.bot.download_file(file_path, download_path)
+            await message.answer(f"Документ '{message.document.file_name}' получен.")
+            upload_pdf(message.document.file_name)
+        else:
+            await message.answer("Это не документ и не ссылка. Действие отменено.")
     else:
-        await message.answer("Это не документ. Действие отменено.")
+        url_pattern = r"^https?://[^\s]+$"
+        if re.match(url_pattern, message.text):
+            await message.answer("Вы отправили ссылку.")
+            upload_url(message.text)
 
 @dp.message(Command("delete"))
 async def bot_delete(message: Message) -> None:
@@ -233,7 +247,7 @@ async def bot_list(message: Message) -> None:
 
     msg = "Список загруженных вами документов:\n\n"
     for i, file in enumerate(dir_list, 1):
-        msg += f"{i}. {file}\n"
+        msg += f"({i}). {file}\n"
 
     await message.answer(msg)
 
